@@ -38,8 +38,7 @@ class DbusEvccChargerService:
         ]
 
         # get data from go-eCharger
-        data = self._getEvccChargerData()
-        result = data["result"]
+        result = self._getEvccChargerData()
         loadpoint = result["loadpoints"][lpInstance]
 
         # Set custom name from loadpoint title
@@ -56,7 +55,7 @@ class DbusEvccChargerService:
         self._dbusservice.add_path('/ProductId', 0xFFFF)  #
         self._dbusservice.add_path('/ProductName', productname)
         self._dbusservice.add_path('/CustomName', customname)
-        #self._dbusservice.add_path('/FirmwareVersion', int(data['divert_update']))
+        self._dbusservice.add_path('/FirmwareVersion', result["version"])
         self._dbusservice.add_path('/HardwareVersion', 2)
         #self._dbusservice.add_path('/Serial', data['comm_success'])
         self._dbusservice.add_path('/Connected', 1)
@@ -136,8 +135,7 @@ class DbusEvccChargerService:
     def _update(self):
         try:
             # get data from go-eCharger
-            data = self._getEvccChargerData()
-            result = data["result"]
+            result = self._getEvccChargerData()
             loadpoint = result["loadpoints"][lpInstance]
 
             # send data to DBus
