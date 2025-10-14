@@ -3,6 +3,7 @@
 # import normal packages
 import platform
 import logging
+from logging.handlers import TimedRotatingFileHandler
 import os
 import sys
 
@@ -14,21 +15,44 @@ import sys
 import time
 import requests  # for http GET
 import configparser  # for config/ini file
+import dbus
 
 # our own packages from victron
-sys.path.insert(1, os.path.join(os.path.dirname(__file__), '/opt/victronenergy/dbus-systemcalc-py/ext/velib_python'))
-from vedbus import VeDbusService
+sys.path.insert(1, '/opt/victronenergy/dbus-systemcalc-py/ext/velib_python')
+from vedbus import VeDbusService, VeDbusItemImport
 
 
 class DbusEvccChargerService:
     def __init__(self, servicename, paths, productname='EVCC-Charger', connection='EVCC REST API'):
         config = self._getConfig()
-        deviceinstance = int(config['DEFAULT']['Deviceinstance'])
         global lpInstance
+        global vebus
+        global staticVoltage
+        deviceinstance = int(config['DEFAULT']['Deviceinstance'])
         lpInstance = int(config['DEFAULT']['LoadpointInstance'])
+        acPosition = int(config['DEFAULT']['AcPosition'])
+        acVoltage = config['DEFAULT']['AcVoltage']
+        veBusDevice = config['DEFAULT']['VEBusDev']
+        staticVoltage = int(config['DEFAULT']['StaticVoltage'])
 
-        self._dbusservice = VeDbusService("{}.http_{:02d}".format(servicename, deviceinstance))
+        if acVoltage == "vebus":
+            vebus = True
+        else:
+            vebus = False
+
+        self._dbusservice = VeDbusService("{}.http_{:02d}".format(servicename, deviceinstance), register=False)
         self._paths = paths
+
+        if vebus == True:
+            # --- read AC-out voltages from VE.Bus (MultiPlus-II) via velib_python ---
+            self._bus = dbus.SystemBus()
+            #self._vebus_service = 'com.victronenergy.vebus.ttyS4'  # multiplus-2 3-phase-system 
+            self._vebus_service = veBusDevice  # multiplus-2 3-phase-system 
+            self._v_items = {
+                'L1': VeDbusItemImport(self._bus, self._vebus_service, '/Ac/Out/L1/V'),
+                'L2': VeDbusItemImport(self._bus, self._vebus_service, '/Ac/Out/L2/V'),
+                'L3': VeDbusItemImport(self._bus, self._vebus_service, '/Ac/Out/L3/V'),
+            }
 
         logging.debug("%s /DeviceInstance = %d" % (servicename, deviceinstance))
 
@@ -37,7 +61,7 @@ class DbusEvccChargerService:
             '/Mode'
         ]
 
-        # get data from go-eCharger
+        # get data from eCharger
         result = self._getEvccChargerData()
         loadpoint = result["loadpoints"][lpInstance]
 
@@ -52,16 +76,15 @@ class DbusEvccChargerService:
 
         # Create the mandatory objects
         self._dbusservice.add_path('/DeviceInstance', deviceinstance)
-        self._dbusservice.add_path('/ProductId', 0xFFFF)  #
+        self._dbusservice.add_path('/ProductId', 0xC025)
         self._dbusservice.add_path('/ProductName', productname)
         self._dbusservice.add_path('/CustomName', customname)
         self._dbusservice.add_path('/FirmwareVersion', result["version"])
         self._dbusservice.add_path('/HardwareVersion', 2)
-        #self._dbusservice.add_path('/Serial', data['comm_success'])
         self._dbusservice.add_path('/Connected', 1)
         self._dbusservice.add_path('/UpdateIndex', 0)
 
-        self._dbusservice.add_path('/Position', 1) # 0: ac out, 1: ac in
+        self._dbusservice.add_path('/Position', acPosition)
 
         # add paths without units
         for path in paths_wo_unit:
@@ -71,6 +94,12 @@ class DbusEvccChargerService:
         for path, settings in self._paths.items():
             self._dbusservice.add_path(
                 path, settings['initial'], gettextcallback=settings['textformat'], writeable=False)
+
+        try:
+            self._dbusservice.register()
+        except dbus.exceptions.DBusException as e:
+            logging.error(f"Error registering at dbus: {e}")
+            raise
 
         # last update
         self._lastUpdate = 0
@@ -123,18 +152,25 @@ class DbusEvccChargerService:
         if not json_data:
             raise ValueError("Converting response to JSON failed")
 
-        return json_data
+        # until evcc version 0.205.0 there was a "result" wrapper in the JSON
+        # support both cases for now
+        if ("result" in json_data):
+            return json_data["result"]
+        else:
+            return json_data
 
     def _signOfLife(self):
         logging.info("--- Start: sign of life ---")
         logging.info("Last _update() call: %s" % (self._lastUpdate))
         logging.info("Last '/Ac/Power': %s" % (self._dbusservice['/Ac/Power']))
+        logging.info("Last '/Current': %s" % (self._dbusservice['/Current']))
+        logging.info("Last '/Ac/Voltage': %s" % (self._dbusservice['/Ac/Voltage']))
         logging.info("--- End: sign of life ---")
         return True
 
     def _update(self):
         try:
-            # get data from go-eCharger
+            # get data from Charger
             result = self._getEvccChargerData()
             loadpoint = result["loadpoints"][lpInstance]
 
@@ -169,7 +205,7 @@ class DbusEvccChargerService:
                 self._dbusservice['/Mode'] = 0
                 self._dbusservice['/StartStop'] = 1
 
-	        # 0:EVdisconnected; 1:Connected; 2:Charging; 3:Charged; 4:Wait sun; 5:Wait RFID; 6:Wait enable; 7:Low SOC; 8:Ground error; 9:Welded contacts error; defaut:Unknown;
+	    # 0:EVdisconnected; 1:Connected; 2:Charging; 3:Charged; 4:Wait sun; 5:Wait RFID; 6:Wait enable; 7:Low SOC; 8:Ground error; 9:Welded contacts error; defaut:Unknown;
             status = 0
             if loadpoint['connected'] == False:
                 status = 0
@@ -183,6 +219,7 @@ class DbusEvccChargerService:
             # is this session charged energy or total charged energy?
             if status == 0:
                 self._dbusservice['/Ac/Energy/Forward'] = 0
+                self._dbusservice['/ChargingTime'] = 0			
             else:
                 self._dbusservice['/Ac/Energy/Forward'] = float(loadpoint['chargedEnergy']) / 1000  # kWh
 
@@ -214,12 +251,18 @@ class DbusEvccChargerService:
 def main():
     # configure logging
     logging.basicConfig(format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
-                        datefmt='%Y-%m-%d %H:%M:%S',
-                        level=logging.INFO,
-                        handlers=[
-                            logging.FileHandler("%s/current.log" % (os.path.dirname(os.path.realpath(__file__)))),
-                            logging.StreamHandler()
-                        ])
+                    datefmt='%Y-%m-%d %H:%M:%S',
+                    level=logging.INFO,
+                    handlers=[
+                        TimedRotatingFileHandler(
+                            filename="%s/current.log" % (os.path.dirname(os.path.realpath(__file__))),
+                            when="midnight",        # rotiert täglich um Mitternacht
+                            interval=1,
+                            backupCount=1,          # nur 1 vorherige Logdatei behalten
+                            encoding="utf-8"
+                        ),
+                        logging.StreamHandler()
+                    ])
 
     try:
         logging.info("Start")
