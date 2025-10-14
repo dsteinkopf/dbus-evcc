@@ -182,15 +182,18 @@ class DbusEvccChargerService:
             voltage3 = float(loadpoint['chargeVoltages'][2]) # volt
             voltage = (voltage1 + voltage2 + voltage3) / 3 # 230 # adjust to your voltage
 
+            chargePower = float(loadpoint['chargePower'])  # watt
+            chargeCurrent = chargePower / voltage  # ampere
+
             self._dbusservice['/Ac/L1/Power'] = float(loadpoint['chargeCurrents'][0]) * voltage1 # watt
             self._dbusservice['/Ac/L2/Power'] = float(loadpoint['chargeCurrents'][1]) * voltage2 # watt
             self._dbusservice['/Ac/L3/Power'] = float(loadpoint['chargeCurrents'][2]) * voltage3 # watt
-            self._dbusservice['/Ac/Voltage'] = voltage
+            self._dbusservice['/Ac/Voltage'] = round(voltage, 0)
 
-            self._dbusservice['/Ac/Power'] = float(loadpoint['chargePower']) # w
-            self._dbusservice['/Current'] = float(loadpoint['chargePower']) / voltage
+            self._dbusservice['/Ac/Power'] = round(chargePower, 1)  # watt
+            self._dbusservice['/Current'] = round(chargeCurrent, 1)  # ampere
 
-            self._dbusservice['/SetCurrent'] = float(loadpoint['chargePower']) / voltage
+            self._dbusservice['/SetCurrent'] = round(chargeCurrent, 1)  # ampere
             self._dbusservice['/MaxCurrent'] = int(loadpoint['maxCurrent']) # int(data['ama'])
 
 
@@ -205,7 +208,7 @@ class DbusEvccChargerService:
                 self._dbusservice['/Mode'] = 0
                 self._dbusservice['/StartStop'] = 1
 
-	    # 0:EVdisconnected; 1:Connected; 2:Charging; 3:Charged; 4:Wait sun; 5:Wait RFID; 6:Wait enable; 7:Low SOC; 8:Ground error; 9:Welded contacts error; defaut:Unknown;
+            # 0:EVdisconnected; 1:Connected; 2:Charging; 3:Charged; 4:Wait sun; 5:Wait RFID; 6:Wait enable; 7:Low SOC; 8:Ground error; 9:Welded contacts error; defaut:Unknown;
             status = 0
             if loadpoint['connected'] == False:
                 status = 0
