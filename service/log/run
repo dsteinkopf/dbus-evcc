@@ -1,0 +1,5 @@
+#!/bin/sh
+# Without a log service runsv drops the run script's output, so failures before
+# dbus-evcc.py sets up its own file logging (import errors, syntax errors) are
+# lost. Same multilog setup as the dbus-opendtu services.
+exec multilog t s153600 n2 /var/log/dbus-evcc

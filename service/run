@@ -1,5 +1,8 @@
 #!/bin/sh
-SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+# BASH_SOURCE and &> are bash-only in a #!/bin/sh script; they work today only
+# because /bin/sh is bash on Venus OS.
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 
 exec 2>&1
-python $(realpath $SCRIPT_DIR/../dbus-evcc.py)
+# realpath keeps the absolute form restart.sh greps for via pgrep -f
+exec python "$(realpath "$SCRIPT_DIR/../dbus-evcc.py")"
