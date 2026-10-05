@@ -55,7 +55,7 @@ class DbusEvccChargerService:
                 'L3': VeDbusItemImport(self._bus, self._vebus_service, '/Ac/Out/L3/V'),
             }
 
-        logging.debug("%s /DeviceInstance = %d" % (servicename, deviceinstance))
+        logging.debug("%s /DeviceInstance = %d", servicename, deviceinstance)
 
         paths_wo_unit = [
             '/Status',
@@ -159,7 +159,7 @@ class DbusEvccChargerService:
 
         # check for response
         if not request_data:
-            raise ConnectionError("No response from EVCC-Charger - %s" % (URL))
+            raise ConnectionError(f"No response from EVCC-Charger - {URL}")
 
         json_data = request_data.json()
 
@@ -176,10 +176,10 @@ class DbusEvccChargerService:
 
     def _signOfLife(self):
         logging.info("--- Start: sign of life ---")
-        logging.info("Last _update() call: %s" % (self._lastUpdate))
-        logging.info("Last '/Ac/Power': %s" % (self._dbusservice['/Ac/Power']))
-        logging.info("Last '/Current': %s" % (self._dbusservice['/Current']))
-        logging.info("Last '/Ac/Voltage': %s" % (self._dbusservice['/Ac/Voltage']))
+        logging.info("Last _update() call: %s", self._lastUpdate)
+        logging.info("Last '/Ac/Power': %s", self._dbusservice['/Ac/Power'])
+        logging.info("Last '/Current': %s", self._dbusservice['/Current'])
+        logging.info("Last '/Ac/Voltage': %s", self._dbusservice['/Ac/Voltage'])
         logging.info("--- End: sign of life ---")
         return True
 
@@ -247,8 +247,8 @@ class DbusEvccChargerService:
                 self._dbusservice['/ChargingTime'] = int(loadpoint["chargeDuration"]) # /1000000000  # s
 
             # logging
-            logging.debug("Wallbox Consumption (/Ac/Power): %s" % (self._dbusservice['/Ac/Power']))
-            logging.debug("Wallbox Forward (/Ac/Energy/Forward): %s" % (self._dbusservice['/Ac/Energy/Forward']))
+            logging.debug("Wallbox Consumption (/Ac/Power): %s", self._dbusservice['/Ac/Power'])
+            logging.debug("Wallbox Forward (/Ac/Energy/Forward): %s", self._dbusservice['/Ac/Energy/Forward'])
             logging.debug("---")
 
             # increment UpdateIndex - to show that new data is available
@@ -273,7 +273,7 @@ def main():
                     level=logging.INFO,
                     handlers=[
                         TimedRotatingFileHandler(
-                            filename="%s/current.log" % (os.path.dirname(os.path.realpath(__file__))),
+                            filename=f"{os.path.dirname(os.path.realpath(__file__))}/current.log",
                             when="midnight",        # rotiert täglich um Mitternacht
                             interval=1,
                             backupCount=1,          # nur 1 vorherige Logdatei behalten
