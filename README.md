@@ -48,6 +48,12 @@ Within the project there is a file `/data/dbus-evcc/config.ini` - just change th
 
 If you have more than two loadpoints, the procedure is the same, but the indexes should be counted up.
 
+## Tests
+The tests in `tests/` run on any machine, without Venus OS and without a running EVCC: the Victron-only modules are stubbed and EVCC is replaced by a local dummy server.
+```
+uv run --with requests python -m unittest discover -s tests -v
+```
+
 ## Useful links
 Many thanks. @vikt0rm, @fabian-lauer, @trixing and @JuWorkshop project:
 - https://github.com/trixing/venus.dbus-twc3
