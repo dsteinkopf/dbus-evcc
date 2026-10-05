@@ -26,6 +26,7 @@ Within the project there is a file `/data/dbus-evcc/config.ini` - just change th
 | Section  | Config value | Explanation |
 | ------------- | ------------- | ------------- |
 | DEFAULT  | AccessType | Fixed value 'OnPremise' |
+| DEFAULT  | HttpTimeout | Seconds to wait for EVCC before a poll is given up |
 | DEFAULT  | SignOfLifeLog  | Time in minutes how often a status is added to the log-file `current.log` with log-level INFO |
 | DEFAULT  | Deviceinstance | Unique ID identifying the charger in Venus OS |
 | ONPREMISE  | Host | IP or hostname of EVCC |

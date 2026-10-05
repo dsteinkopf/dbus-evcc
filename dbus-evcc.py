@@ -28,12 +28,13 @@ class DbusEvccChargerService:
         global lpInstance
         global vebus
         global staticVoltage
-        deviceinstance = int(config['DEFAULT']['Deviceinstance'])
-        lpInstance = int(config['DEFAULT']['LoadpointInstance'])
-        acPosition = int(config['DEFAULT']['AcPosition'])
-        acVoltage = config['DEFAULT']['AcVoltage']
-        veBusDevice = config['DEFAULT']['VEBusDev']
-        staticVoltage = int(config['DEFAULT']['StaticVoltage'])
+        deviceinstance = self._getConfigValue(config, 'DEFAULT', 'Deviceinstance', int)
+        lpInstance = self._getConfigValue(config, 'DEFAULT', 'LoadpointInstance', int)
+        acPosition = self._getConfigValue(config, 'DEFAULT', 'AcPosition', int)
+        acVoltage = self._getConfigValue(config, 'DEFAULT', 'AcVoltage')
+        veBusDevice = self._getConfigValue(config, 'DEFAULT', 'VEBusDev')
+        staticVoltage = self._getConfigValue(config, 'DEFAULT', 'StaticVoltage', int)
+        self._httpTimeout = self._getConfigValue(config, 'DEFAULT', 'HttpTimeout', float)
 
         if acVoltage == "vebus":
             vebus = True
@@ -113,34 +114,48 @@ class DbusEvccChargerService:
         # add _signOfLife 'timer' to get feedback in log every 5minutes
         gobject.timeout_add(self._getSignOfLifeInterval() * 60 * 1000, self._signOfLife)
 
+    def _getConfigPath(self):
+        return f"{os.path.dirname(os.path.realpath(__file__))}/config.ini"
+
     def _getConfig(self):
         config = configparser.ConfigParser()
-        config.read("%s/config.ini" % (os.path.dirname(os.path.realpath(__file__))))
+        config.read(self._getConfigPath())
         return config
+
+    def _getConfigValue(self, config, section, key, convert: type = str):
+        # a bare KeyError / int() error names neither the file nor the key
+        if not config.has_option(section, key):
+            raise ValueError(f"Missing config value [{section}] {key} in {self._getConfigPath()}")
+        raw = config[section][key]
+        try:
+            return convert(raw)
+        except ValueError as e:
+            raise ValueError(f"Invalid config value [{section}] {key} = '{raw}' in {self._getConfigPath()}: "
+                             f"expected {convert.__name__}") from e
 
     def _getSignOfLifeInterval(self):
         config = self._getConfig()
-        value = config['DEFAULT']['SignOfLifeLog']
+        if not self._getConfigValue(config, 'DEFAULT', 'SignOfLifeLog'):
+            return 0
 
-        if not value:
-            value = 0
-
-        return int(value)
+        return self._getConfigValue(config, 'DEFAULT', 'SignOfLifeLog', int)
 
     def _getEvccChargerStatusUrl(self):
         config = self._getConfig()
-        accessType = config['DEFAULT']['AccessType']
+        accessType = self._getConfigValue(config, 'DEFAULT', 'AccessType')
 
         if accessType == 'OnPremise':
-            URL = "http://%s/api/state" % (config['ONPREMISE']['Host'])
+            host = self._getConfigValue(config, 'ONPREMISE', 'Host')
+            URL = f"http://{host}/api/state"
         else:
-            raise ValueError("AccessType %s is not supported" % (config['DEFAULT']['AccessType']))
+            raise ValueError(f"AccessType {accessType} is not supported")
 
         return URL
 
     def _getEvccChargerData(self):
         URL = self._getEvccChargerStatusUrl()
-        request_data = requests.get(url=URL)
+        # without a timeout a stalled evcc blocks the GLib mainloop forever
+        request_data = requests.get(url=URL, timeout=self._httpTimeout)
 
         # check for response
         if not request_data:
